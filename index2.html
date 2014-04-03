@@ -1,0 +1,94 @@
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Test</title>
+    <script language="javascript">
+        var vowel  = new String ('аәоөұүыiеиуёэюя');                     // Гласные буквы
+        var voiced = new String ('ғңбвгджзрлмншщ');       // Звонкие и шипящие согласные
+        var deaf   = new String ('қһкпстфхцч');                             // Глухие согласные
+       // var brief  = new String ('й');                                      // Й
+        var other  = new String ('ьъ');                                  // Другие
+        var cons   = new String ('ғқңһбвгджзкпстфхцчшщйрлмн'); // Все согласные
+        // Валидация правильности введенной строки
+        function validateString (s) {
+            // Поленился делать :)
+            return s;
+        }
+        // Есть ли в строке гласные?
+        function isNotLastSep (remainStr) {
+            var is = false;
+            for (var i = 0; i < remainStr.length; i++) {
+                if (vowel.indexOf (remainStr.substr (i, 1)) != -1) { is = true; break; }
+            }
+            return is;
+        }
+        // Собственно функция разбиения слова на слоги
+        function getSeparatedString (s) {
+            // Добавляем слог в массив и начинаем новый слог
+            function addSep () {
+                sepArr.push (tmpS);
+                tmpS = '';
+            }
+            s = validateString (s);
+            var tmpL   = new String ();  // Текущий символ
+            var tmpS   = new String ();  // Текущий слог
+            var sepArr = new Array ();   // Массив слогов
+            for (var i = 0; i < s.length; i++) {
+                tmpL = s.substr (i, 1);
+                tmpS += tmpL;
+                // Проверка на признаки конца слогов
+
+                // если текущая гласная и следующая тоже гласная
+                if (
+                        (i < s.length - 1) &&
+                                (vowel.indexOf (tmpL) != -1) &&
+                                (vowel.indexOf (s.substr (i+1, 1)) != -1)
+                        ) { addSep (); continue; }
+                // если текущая гласная, следующая согласная, а после неё гласная
+                if (
+                        (i < s.length - 2) &&
+                                (vowel.indexOf (tmpL) != -1) &&
+                                (cons.indexOf (s.substr (i+1, 1)) != -1) &&
+                                (vowel.indexOf (s.substr (i+2, 1)) != -1)
+                        ) { addSep (); continue; }
+                // если текущая гласная, следующая глухая согласная, а после согласная и это не последний слог
+                if (
+                        (i < s.length - 2) &&
+                                (vowel.indexOf (tmpL) != -1) &&
+                                (deaf.indexOf (s.substr (i+1, 1)) != -1) &&
+                                (cons.indexOf (s.substr (i+2, 1)) != -1) &&
+                                (isNotLastSep (s.substr (i+1, s.length-i+1)))
+                        ) { addSep (); continue; }
+                // если текущая звонкая или шипящая согласная, перед ней гласная, следующая не гласная и не другая, и это не последний слог
+                if (
+                        (i > 0) &&
+                                (i < s.length - 1) &&
+                                (voiced.indexOf (tmpL) != -1) &&
+                                (vowel.indexOf (s.substr (i-1, 1)) != -1) &&
+                                (vowel.indexOf (s.substr (i+1, 1)) == -1) &&
+                                (other.indexOf (s.substr (i+1, 1)) == -1) &&
+                                (isNotLastSep (s.substr (i+1, s.length-i+1)))
+                        ) { addSep (); continue; }
+                // если текущая другая, а следующая не гласная если это первый слог
+                if (
+                        (i < s.length - 1) &&
+                                (other.indexOf (tmpL) != -1) &&
+                                ((vowel.indexOf (s.substr (i+1, 1)) == -1) ||
+                                        (isNotLastSep (s.substr (0, i))))
+                        ) { addSep (); continue; }
+            }
+            sepArr.push (tmpS);
+            return sepArr.join('-');
+        }
+
+    </script>
+</head>
+<body>
+<form>
+    <input type="text" size="30" name="fromString" value="">
+    <input type="button" value="Go!" onClick="document.forms[0].elements[2].value = getSeparatedString (document.forms[0].elements[0].value);">
+    <br>
+    <input type="text" size="30" name="toString" value="">
+</form>
+</body>
+</html>
