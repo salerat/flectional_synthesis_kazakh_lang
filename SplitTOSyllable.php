@@ -7,51 +7,42 @@
  */
 
 namespace kaz;
+
 error_reporting(E_ALL | E_STRICT);
 ini_set('display_errors', 'On');
 
-ini_set( 'default_charset', 'UTF-8' );
+ini_set('default_charset', 'UTF-8');
 mb_internal_encoding("UTF-8");
 
 class SplitTOSyllable
 {
+    protected $word;
+    protected $syllableArray;
 
     protected $vowel = 'аәоөұүыiеиуёэюя'; // Гласные буквы
     protected $voiced = 'ғңбвгджзрлмншщ'; // Звонкие и шипящие согласные
-    protected $deaf = 'қһкпстфхцч'; // Глухие согласные
-    // var brief  = new String ('й';                                      // Й
+    protected $deaf = 'қһкпстфхцч'; // Глухие согласные                                    // Й
     protected $other = 'ьъ'; // Другие
     protected $cons = 'ғқңһбвгджзкпстфхцчшщйрлмн'; // Все согласные */
-/*
 
-    protected $vowel;
-    protected $voiced;
-    protected $deaf;
-    // var brief  = new String ('й';                                      // Й
-    protected $other;
-    protected $cons;
-*/
-    function __construct() {
-     /*   $this->vowel = iconv("UTF-8", "PT154", 'аәоөұүыiеиуёэюя');
-        $this->voiced =iconv("UTF-8", "PT154", 'ғңбвгджзрлмншщ'); // Звонкие и шипящие согласные
-        $this->deaf = iconv("UTF-8", "PT154", 'қһкпстфхцч'); // Глухие согласные
-        // var brief  = new String ('й');                                      // Й
-        $this->other = iconv("UTF-8", "PT154", 'ьъ'); // Другие
-        $this->cons = iconv("UTF-8", "PT154", 'ғқңһбвгджзкпстфхцчшщйрлмн'); // Все согласные */
+    function __construct($word)
+    {
+        $this->word = $word;
+        $this->syllableArray = $this->getSeparatedString($this->word);
     }
 
     // Валидация правильности введенной строки
     protected function validateString($s)
     {
-        // Поленился делать :)
         return $s;
     }
 
-    protected function mbStringToArray ($string) {
+    protected function mbStringToArray($string)
+    {
         $strlen = mb_strlen($string);
         while ($strlen) {
-            $array[] = mb_substr($string,0,1,"UTF-8");
-            $string = mb_substr($string,1,$strlen,"UTF-8");
+            $array[] = mb_substr($string, 0, 1, "UTF-8");
+            $string = mb_substr($string, 1, $strlen, "UTF-8");
             $strlen = mb_strlen($string);
         }
         return $array;
@@ -61,8 +52,10 @@ class SplitTOSyllable
     protected function isNotLastSep($remainStr)
     {
         $vowelsArray = $this->mbStringToArray($this->vowel);
-        foreach($vowelsArray as $a) {
-            if (mb_stripos($remainStr,$a) !== false) return true;
+        foreach ($vowelsArray as $a) {
+            if (mb_stripos($remainStr, $a) !== false) {
+                return true;
+            }
         }
         return false;
     }
@@ -75,7 +68,7 @@ class SplitTOSyllable
     }
 
 // Собственно функция разбиения слова на слоги
-    public function getSeparatedString($s)
+    protected function getSeparatedString($s)
     {
         $s = $this->validateString($s);
         $tmpL = ''; // Текущий символ
@@ -83,7 +76,7 @@ class SplitTOSyllable
         $sepArr = array(); // Массив слогов
         for ($i = 0; $i < mb_strlen($s); $i++) {
             $tmpL = mb_substr($s, $i, 1);
-            $tmpS.= $tmpL;
+            $tmpS .= $tmpL;
 
             // Проверка на признаки конца слогов
 
@@ -143,34 +136,17 @@ class SplitTOSyllable
         }
 
         array_push($sepArr, $tmpS);
-        die(var_dump($sepArr));
-        //die(var_dump(iconv("PT154", "UTF-8", $sepArr[0])));
-        //return $tmpS;
+        return $sepArr;
+    }
+
+    public function getSyllableArray()
+    {
+        return $this->syllableArray;
+    }
+
+    public function getLastSyllable()
+    {
+        return end($this->syllableArray);
     }
 
 }
-
-$t = new SplitTOSyllable();
-$text = 'емтихандар';
-
-//$text = iconv(mb_detect_encoding($text, mb_detect_order(), true), "UTF-8", $text);
-//$tmpL = mb_substr($text, 0, 1);
-
-//echo $text;
-//$text = iconv("UTF-8", "PT154", $text);
-$c = $t->getSeparatedString($text);
-
-echo '
-<html>
-<head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Test</title>
-
-    </head>
-<body>
-
-'.$c.'
-
-</body>
-</html>
-';
