@@ -1,20 +1,7 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: salerat
- * Date: 4/3/14
- * Time: 4:04 PM
- */
-
 namespace kaz;
 
-error_reporting(E_ALL | E_STRICT);
-ini_set('display_errors', 'On');
-
-ini_set('default_charset', 'UTF-8');
-mb_internal_encoding("UTF-8");
-
-class SplitTOSyllable
+class SplitToSyllable
 {
     protected $word;
     protected $syllableArray;
@@ -22,11 +9,12 @@ class SplitTOSyllable
     protected $vowel = 'аәоөұүыiеиуёэюя'; // Гласные буквы
     protected $voiced = 'ғңбвгджзрлмншщ'; // Звонкие и шипящие согласные
     protected $deaf = 'қһкпстфхцч'; // Глухие согласные                                    // Й
-    protected $other = 'ьъ'; // Другие
     protected $cons = 'ғқңһбвгджзкпстфхцчшщйрлмн'; // Все согласные */
 
     function __construct($word)
     {
+        ini_set('default_charset', 'UTF-8');
+        mb_internal_encoding("UTF-8");
         $this->word = $word;
         $this->syllableArray = $this->getSeparatedString($this->word);
     }
@@ -117,22 +105,12 @@ class SplitTOSyllable
                 (mb_strpos($this->voiced, $tmpL) !== false) &&
                 (mb_strpos($this->vowel, mb_substr($s, $i - 1, 1)) !== false) &&
                 (mb_strpos($this->vowel, mb_substr($s, $i + 1, 1)) === false) &&
-                (mb_strpos($this->other, mb_substr($s, $i + 1, 1)) === false) &&
                 ($this->isNotLastSep(mb_substr($s, $i + 1, mb_strlen($s) - $i + 1)))
             ) {
                 $this->addSep($sepArr, $tmpS);
                 continue;
             }
-            // если текущая другая, а следующая не гласная если это первый слог
-            if (
-                ($i < mb_strlen($s) - 1) &&
-                (mb_strpos($this->other, $tmpL) !== false) &&
-                ((mb_strpos($this->vowel, mb_substr($s, $i + 1, 1)) === false) ||
-                    ($this->isNotLastSep(mb_substr($s, 0, $i))))
-            ) {
-                $this->addSep($sepArr, $tmpS);
-                continue;
-            }
+
         }
 
         array_push($sepArr, $tmpS);
