@@ -6,15 +6,21 @@ class SplitToSyllable
     protected $word;
     protected $syllableArray;
 
-    protected $vowel = 'аәоөұүыiеиуёэюя'; // Гласные буквы
-    protected $voiced = 'ғңбвгджзрлмншщ'; // Звонкие и шипящие согласные
-    protected $deaf = 'қһкпстфхцч'; // Глухие согласные                                    // Й
-    protected $cons = 'ғқңһбвгджзкпстфхцчшщйрлмн'; // Все согласные */
+    protected $vowel; // Гласные буквы
+    protected $voiced; // Звонкие и шипящие согласные
+    protected $deaf; // Глухие согласные
+    protected $cons; // Все согласные
 
-    function __construct($word)
+    function __construct($word, $vowel, $voiced, $deaf, $cons)
     {
         ini_set('default_charset', 'UTF-8');
         mb_internal_encoding("UTF-8");
+
+        $this->vowel = $vowel;
+        $this->voiced = $voiced;
+        $this->deaf = $deaf;
+        $this->cons = $cons;
+
         $this->word = $word;
         $this->syllableArray = $this->getSeparatedString($this->word);
     }

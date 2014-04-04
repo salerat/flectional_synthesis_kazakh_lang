@@ -2,6 +2,7 @@
 
 namespace kaz;
 require 'SplitToSyllable.php';
+
 error_reporting(E_ALL | E_STRICT);
 ini_set('display_errors', 'On');
 
@@ -9,12 +10,37 @@ class Kaz
 {
     protected $mysqli;
     protected $wordOriginal;
+    protected $vowel; // Гласные буквы
+    protected $voiced; // Звонкие и шипящие согласные
+    protected $deaf; // Глухие согласные
+    protected $cons; // Все согласные
 
     function __construct($wordOriginal)
     {
         $this->mysqli = new \mysqli("localhost", "root", "gerogle", "term_k");
         $this->mysqli->set_charset('utf8');
         $this->wordOriginal = $wordOriginal;
+
+        $query = "SELECT word FROM vowel";
+        $result = $this->mysqli->query($query);
+        $this->vowel = array();
+        while ($row = $result->fetch_assoc()) array_push($this->vowel, $row['word']);
+
+        $query = "SELECT word FROM consonant WHERE voiced = 1 OR hiss = 1";
+        $result = $this->mysqli->query($query);
+        $this->voiced = array();
+        while ($row = $result->fetch_assoc()) array_push($this->voiced, $row['word']);
+
+        $query = "SELECT word FROM consonant WHERE deaf = 1";
+        $result = $this->mysqli->query($query);
+        $this->deaf = array();
+        while ($row = $result->fetch_assoc()) array_push($this->deaf, $row['word']);
+
+        $query = "SELECT word FROM consonant";
+        $result = $this->mysqli->query($query);
+        $this->cons = array();
+        while ($row = $result->fetch_assoc()) array_push($this->cons, $row['word']);
+
     }
 
     public function test()
@@ -37,7 +63,7 @@ class Kaz
     }
 
     public function getFlectiveClass() {
-        $splitSyllable = new SplitToSyllable($this->wordOriginal);
+        $splitSyllable = new SplitToSyllable($this->wordOriginal, implode($this->vowel), implode($this->voiced), implode($this->deaf), implode($this->cons) );
         echo $splitSyllable->getLastSyllable();
     }
 }
