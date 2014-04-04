@@ -31,7 +31,7 @@ class SplitToSyllable
         return $s;
     }
 
-    protected function mbStringToArray($string)
+    public function mbStringToArray($string)
     {
         $strlen = mb_strlen($string);
         while ($strlen) {

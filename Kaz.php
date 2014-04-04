@@ -10,7 +10,11 @@ class Kaz
 {
     protected $mysqli;
     protected $wordOriginal;
+    protected $lastSyllableArray;
+
     protected $vowel; // Гласные буквы
+    protected $vowelHard; // Гласные буквы твердые
+    protected $vowelSoft; // Гласные буквы мягкие
     protected $voiced; // Звонкие и шипящие согласные
     protected $deaf; // Глухие согласные
     protected $cons; // Все согласные
@@ -25,6 +29,16 @@ class Kaz
         $result = $this->mysqli->query($query);
         $this->vowel = array();
         while ($row = $result->fetch_assoc()) array_push($this->vowel, $row['word']);
+
+        $query = "SELECT word FROM vowel WHERE hard = 1";
+        $result = $this->mysqli->query($query);
+        $this->vowelHard = array();
+        while ($row = $result->fetch_assoc()) array_push($this->vowelHard, $row['word']);
+
+        $query = "SELECT word FROM vowel WHERE soft = 1";
+        $result = $this->mysqli->query($query);
+        $this->vowelSoft = array();
+        while ($row = $result->fetch_assoc()) array_push($this->vowelSoft, $row['word']);
 
         $query = "SELECT word FROM consonant WHERE voiced = 1 OR hiss = 1";
         $result = $this->mysqli->query($query);
@@ -41,6 +55,28 @@ class Kaz
         $this->cons = array();
         while ($row = $result->fetch_assoc()) array_push($this->cons, $row['word']);
 
+    }
+    // определяем мягкость - твердость
+    // 1 - возвращает если в слове гласная твердая
+    // 0 - возвращает если в слове гласная мягкая
+    protected function detectHardSoftEnding() {
+        $resultWord = '';
+        foreach(array_reverse($this->lastSyllableArray) as $word) {
+            if( mb_strpos( implode($this->vowel), $word) !== false ) {
+                $resultWord = $word;
+                break;
+            }
+        }
+
+        if( !empty($resultWord) ) {
+            if( in_array( $resultWord, $this->vowelHard, true) !== false ) {
+                return 1;
+            } else {
+                return 0;
+            }
+        } else {
+            return false;
+        }
     }
 
     public function test()
@@ -64,7 +100,10 @@ class Kaz
 
     public function getFlectiveClass() {
         $splitSyllable = new SplitToSyllable($this->wordOriginal, implode($this->vowel), implode($this->voiced), implode($this->deaf), implode($this->cons) );
-        echo $splitSyllable->getLastSyllable();
+        $this->lastSyllableArray = $splitSyllable->mbStringToArray($splitSyllable->getLastSyllable());
+
+        echo $this->detectHardSoftEnding();
+
     }
 }
 
