@@ -11,6 +11,7 @@ class Kaz
     protected $mysqli;
     protected $wordOriginal;
     protected $lastSyllableArray;
+    protected $splitSyllable;
     protected $flectiveClassArray;
 
     protected $vowel; // Гласные буквы
@@ -61,6 +62,9 @@ class Kaz
         $this->flectiveClassArray = array();
         while ($row = $result->fetch_assoc()) array_push($this->flectiveClassArray, $row);
 
+        $this->splitSyllable = new SplitToSyllable($this->wordOriginal, implode($this->vowel), implode($this->voiced), implode($this->deaf), implode($this->cons) );
+        $this->lastSyllableArray = $this->splitSyllable->mbStringToArray($this->splitSyllable->getLastSyllable());
+
     }
     // определяем мягкость - твердость
     // 1 - возвращает если в слове гласная твердая
@@ -84,27 +88,24 @@ class Kaz
         }
     }
 
-    protected function detectFlectiveClass() {
-        $lastWord = end($this->lastSyllableArray);
+    protected function detectFlectiveClass($lastSyllableArray) {
+        $lastWord = end($lastSyllableArray);
         foreach( $this->flectiveClassArray as $flectiveClass) {
             if($flectiveClass['type'] == 'word') {
                 if( mb_strpos( $flectiveClass['word'], $lastWord) !== false ) {
                     return $flectiveClass['id'];
                 }
             } elseif($flectiveClass['type'] == 'deaf') {
-                foreach( $this->deaf as $deafWord) {
-                    if( in_array($deafWord, $flectiveClass['word'], true) !== false ) {
+                    if( in_array($lastWord, $this->deaf, true) !== false ) {
                         return $flectiveClass['id'];
                     }
-                }
             } elseif($flectiveClass['type'] == 'vowel') {
-                foreach( $this->vowel as $vowelWord) {
-                    if( in_array($vowelWord, $flectiveClass['word'], true) !== false ) {
+                    if( in_array($lastWord, $this->vowel, true) !== false ) {
                         return $flectiveClass['id'];
                     }
-                }
             }
         }
+        return false;
     }
 
     public function test()
@@ -128,28 +129,59 @@ class Kaz
 
     /*
      * Варианты окончаний
-     * 1
-     * 2
-     * 3
+     * 1 мн число и вопрос +
+     * 2 притяжательные +
+     * 3 падежи +
      * 123
-     * 23
-     * 13
+     * 23 +
+     * 13 +
+     * 12
      * */
 
     public function generateAllFlectiveClasses() {
-        foreach( $this->flectiveClassArray as $flectiveClass) {
+       /* foreach( $this->flectiveClassArray as $flectiveClass) {
             //заполнили мн число и падежы
-         /*   $this->generateFlectiveClassForOneType($flectiveClass['id'], 1, 0, 3);
+            $this->generateFlectiveClassForOneType($flectiveClass['id'], 1, 0, 3);
             $this->generateFlectiveClassForOneType($flectiveClass['id'], 0, 1, 3);
             $this->generateFlectiveClassForOneType($flectiveClass['id'], 1, 0, 1);
-            $this->generateFlectiveClassForOneType($flectiveClass['id'], 0, 1, 1);*/
+            $this->generateFlectiveClassForOneType($flectiveClass['id'], 0, 1, 1);
+
             //заполнили все лица, кроме второй формы
-          //  $this->generateSyllableForFace($flectiveClass, 0, 1, '');
-          //  $this->generateSyllableForFace($flectiveClass, 1, 0, '');
+            $this->generateSyllableForFace($flectiveClass, 0, 1, '');
+            $this->generateSyllableForFace($flectiveClass, 1, 0, '');
 
             //заполненые лица второй формы
             $this->generateFlectiveClassForOneType($flectiveClass['id'], 1, 0, 2, "case_type_name ='possessive2' AND ");
             $this->generateFlectiveClassForOneType($flectiveClass['id'], 0, 1, 2, "case_type_name ='possessive2' AND ");
+        }*/
+       // $this->generateSyllableForFirstAndThirdClass(1, 0, 1, 3);
+      //  $this->generateSyllableForFirstAndThirdClass(0, 1, 1, 3);
+     //   $this->generateSyllableForFirstAndThirdClass(1, 0, 2, 3);
+     //   $this->generateSyllableForFirstAndThirdClass(0, 1, 2, 3);
+    }
+
+    //генерируем по началу 1 + 3
+    protected function generateSyllableForFirstAndThirdClass($hard, $soft, $caseNumber1, $caseNumber2) {
+        $hardSoftStr = '';
+        if($hard == 0) {
+            $hardSoftStr = 'soft=1';
+        } else {
+            $hardSoftStr = 'hard=1';
+        }
+        $query = "SELECT * FROM all_case WHERE type_format=".$caseNumber1." AND ".$hardSoftStr;
+        $resultQuestion = $this->mysqli->query($query);
+
+        while ($rowQuestion = $resultQuestion->fetch_assoc()) {
+            $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['word']);
+            $flectiveId = $this->detectFlectiveClass($syllableArray);
+            $query = "SELECT * FROM word_case WHERE case_position=".$caseNumber2." AND ".$hardSoftStr." AND (rule LIKE '%;".$flectiveId.";%' OR rule LIKE '%,".$flectiveId.";%' OR rule LIKE '%;".$flectiveId.",%')";
+            $resultCase = $this->mysqli->query($query);
+            while ($rowCase = $resultCase->fetch_assoc()) {
+                $wordType = $rowQuestion['type'].$rowCase['case_type_name'].';';
+                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format) VALUES (".$flectiveId.",'".$rowQuestion['word'].$rowCase['case_letter']."','".$wordType."', ".$hard.", ".$soft.", ".strval($caseNumber1).strval($caseNumber2).");";
+                $result2 = $this->mysqli->query($query2);
+            }
+            //die(var_dump($flectiveId, $resultCase->num_rows));
         }
     }
 
@@ -178,7 +210,7 @@ class Kaz
 
         if(!empty($result->num_rows)) {
             while ($row = $result->fetch_assoc()) {
-                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft) VALUES (".$flectiveClass['id'].",'".$additionalStr.$row['case_letter']."',';".$row['case_type_name'].";', ".$hard.", ".$soft.");";
+                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format) VALUES (".$flectiveClass['id'].",'".$additionalStr.$row['case_letter']."',';".$row['case_type_name'].";', ".$hard.", ".$soft.", 2);";
                 $result2 = $this->mysqli->query($query2);
                 //  echo $this->mysqli->error;
             }
@@ -198,7 +230,7 @@ class Kaz
     //    die(var_dump(123));
         if(!empty($result->num_rows)) {
             while ($row = $result->fetch_assoc()) {
-                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft) VALUES (".$flectiveId.",'".$row['case_letter']."',';".$row['case_type_name'].";', ".$hard.", ".$soft.");";
+                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format) VALUES (".$flectiveId.",'".$row['case_letter']."',';".$row['case_type_name'].";', ".$hard.", ".$soft.", ".$casePosition.");";
                 $result2 = $this->mysqli->query($query2);
               //  echo $this->mysqli->error;
             }
@@ -206,8 +238,6 @@ class Kaz
     }
 
     public function getFlectiveClass() {
-        $splitSyllable = new SplitToSyllable($this->wordOriginal, implode($this->vowel), implode($this->voiced), implode($this->deaf), implode($this->cons) );
-        $this->lastSyllableArray = $splitSyllable->mbStringToArray($splitSyllable->getLastSyllable());
 
         //echo $this->wordOriginal;
         //echo $this->detectHardSoftEnding();
