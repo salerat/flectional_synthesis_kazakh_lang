@@ -31,15 +31,22 @@ class SplitToSyllable
         return $s;
     }
 
-    public function mbStringToArray($string)
+    public function mbStringToArray($string, $tt='')
     {
+        if(empty($string)) die(var_dump($tt));
         $strlen = mb_strlen($string);
+        $array=array();
         while ($strlen) {
             $array[] = mb_substr($string, 0, 1, "UTF-8");
             $string = mb_substr($string, 1, $strlen, "UTF-8");
             $strlen = mb_strlen($string);
         }
-        return $array;
+        if(!empty($array)) {
+            return $array;
+        } else {
+            return false;
+        }
+
     }
 
 // Есть ли в строке гласные?
