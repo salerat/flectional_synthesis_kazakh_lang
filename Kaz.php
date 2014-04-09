@@ -93,15 +93,15 @@ class Kaz
         foreach( $this->flectiveClassArray as $flectiveClass) {
             if($flectiveClass['type'] == 'word') {
                 if( mb_strpos( $flectiveClass['word'], $lastWord) !== false ) {
-                    return $flectiveClass['id'];
+                    return $flectiveClass;
                 }
             } elseif($flectiveClass['type'] == 'deaf') {
                     if( in_array($lastWord, $this->deaf, true) !== false ) {
-                        return $flectiveClass['id'];
+                        return $flectiveClass;
                     }
             } elseif($flectiveClass['type'] == 'vowel') {
                     if( in_array($lastWord, $this->vowel, true) !== false ) {
-                        return $flectiveClass['id'];
+                        return $flectiveClass;
                     }
             }
         }
@@ -147,8 +147,8 @@ class Kaz
             $this->generateFlectiveClassForOneType($flectiveClass['id'], 0, 1, 1);
 
             //заполнили все лица, кроме второй формы
-            $this->generateSyllableForFace($flectiveClass, 0, 1, '');
-            $this->generateSyllableForFace($flectiveClass, 1, 0, '');
+            $this->generateSyllableForFace($flectiveClass, 0, 1, 2);
+            $this->generateSyllableForFace($flectiveClass, 1, 0, 2);
 
             //заполненые лица второй формы
             $this->generateFlectiveClassForOneType($flectiveClass['id'], 1, 0, 2, "case_type_name ='possessive2' AND ");
@@ -158,10 +158,12 @@ class Kaz
       //  $this->generateSyllableForFirstAndThirdClass(0, 1, 1, 3);
      //   $this->generateSyllableForFirstAndThirdClass(1, 0, 2, 3);
      //   $this->generateSyllableForFirstAndThirdClass(0, 1, 2, 3);
+       // $this->generateSyllableForFirstAndThirdClass(0, 1, 13, 3);
+        $this->generateSyllableForFirstAndSecondClass(0, 1, 1, 2);
     }
 
-    //генерируем по началу 1 + 3
-    protected function generateSyllableForFirstAndThirdClass($hard, $soft, $caseNumber1, $caseNumber2) {
+    //генерируем по началу 1 + 3 и 2 + 3
+    protected function generateSyllableForFirstAndThirdClass($hard, $soft, $caseNumber1, $caseNumber2, $additionalQuery='') {
         $hardSoftStr = '';
         if($hard == 0) {
             $hardSoftStr = 'soft=1';
@@ -173,7 +175,7 @@ class Kaz
 
         while ($rowQuestion = $resultQuestion->fetch_assoc()) {
             $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['word']);
-            $flectiveId = $this->detectFlectiveClass($syllableArray);
+            $flectiveId = $this->detectFlectiveClass($syllableArray)['id'];
             $query = "SELECT * FROM word_case WHERE case_position=".$caseNumber2." AND ".$hardSoftStr." AND (rule LIKE '%;".$flectiveId.";%' OR rule LIKE '%,".$flectiveId.";%' OR rule LIKE '%;".$flectiveId.",%')";
             $resultCase = $this->mysqli->query($query);
             while ($rowCase = $resultCase->fetch_assoc()) {
@@ -185,12 +187,35 @@ class Kaz
         }
     }
 
+    //генерируем под 1 + 2
+    protected function generateSyllableForFirstAndSecondClass($hard, $soft, $caseNumber1, $caseNumber2, $additionalQuery='') {
+        $hardSoftStr = '';
+        if($hard == 0) {
+            $hardSoftStr = 'soft=1';
+        } else {
+            $hardSoftStr = 'hard=1';
+        }
+        $query = "SELECT * FROM all_case WHERE type_format=".$caseNumber1." AND ".$hardSoftStr;
+        $resultQuestion = $this->mysqli->query($query);
+        while ($rowQuestion = $resultQuestion->fetch_assoc()) {
+            $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['word']);
+            $flectiveClassCase = $this->detectFlectiveClass($syllableArray);
+            $this->generateSyllableForFace($rowQuestion['flective_id'], $hard, $soft, $caseNumber2, intval(strval($caseNumber1).strval($caseNumber2)), $rowQuestion['word'], substr($rowQuestion['type'], 1), $flectiveClassCase);
+        }
+    }
     //не забыть про исключение "у" флективного класса 5
     /* 11 - если слово оканчивается на согласную, и слово твердое
      * 12 - если слово оканчивается на согласную, и слово мягкое
      * 13 - если слово оканчивается на согласную, и правил нет
      * */
-    protected function generateSyllableForFace($flectiveClass, $hard, $soft, $lastSyllableArray) {
+    protected function generateSyllableForFace($flectiveClass, $hard, $soft, $casePosition, $caseTypeFormat = 2, $additionalCase = '', $additionalType = '', $flectiveClassCase = null) {
+
+        if(!is_null($flectiveClassCase)) {
+            $flectiveId=$flectiveClass;
+            $flectiveClass=$flectiveClassCase;
+        } else {
+            $flectiveId=$flectiveClass['id'];
+        }
         $hardSoftStr = '';
         if($hard == 0) {
             $hardSoftStr = 'soft=1';
@@ -199,19 +224,17 @@ class Kaz
             $hardSoftStr = 'hard=1';
             $additionalStr = 'i';
         }
-        if( (($flectiveClass['type'] == 'word') && (mb_strpos( $flectiveClass['word'], 'у') === false )) || (($flectiveClass['type'] == 'deaf')) ) {
-            $additionalQueryString = "rule LIKE '%;11;%' OR rule LIKE '%;12;%'";
-        } else {
-            $additionalQueryString = "rule LIKE '%;".$flectiveClass['id'].";%' OR rule LIKE '%;13;%'";
+        if($flectiveClass['type'] == 'vowel') {
             $additionalStr='';
         }
-        $query = "SELECT * FROM word_case WHERE ".$hardSoftStr." AND case_position = 2 AND case_type_name <> 'possessive2' AND (".$additionalQueryString.");";
+        $query = "SELECT * FROM word_case WHERE ".$hardSoftStr." AND case_position = ".$casePosition." AND case_type_name <> 'possessive2' ;";
         $result = $this->mysqli->query($query);
 
         if(!empty($result->num_rows)) {
             while ($row = $result->fetch_assoc()) {
-                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format) VALUES (".$flectiveClass['id'].",'".$additionalStr.$row['case_letter']."',';".$row['case_type_name'].";', ".$hard.", ".$soft.", 2);";
+                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format, last_case) VALUES (".$flectiveId.",'".$additionalCase.$additionalStr.$row['case_letter']."',';".$additionalType.$row['case_type_name'].";', ".$hard.", ".$soft.", ".$caseTypeFormat.", '".$additionalStr.$row['case_letter']."');";
                 $result2 = $this->mysqli->query($query2);
+               // die(var_dump($result->num_rows,$this->mysqli->error));
                 //  echo $this->mysqli->error;
             }
         }
