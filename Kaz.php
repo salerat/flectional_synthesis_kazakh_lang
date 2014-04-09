@@ -135,11 +135,12 @@ class Kaz
      * 123
      * 23 +
      * 13 +
-     * 12
+     * 12 +
      * */
 
     public function generateAllFlectiveClasses() {
-       /* foreach( $this->flectiveClassArray as $flectiveClass) {
+        echo 'Generate 1,2,3'.PHP_EOL;
+        foreach( $this->flectiveClassArray as $flectiveClass) {
             //заполнили мн число и падежы
             $this->generateFlectiveClassForOneType($flectiveClass['id'], 1, 0, 3);
             $this->generateFlectiveClassForOneType($flectiveClass['id'], 0, 1, 3);
@@ -153,13 +154,27 @@ class Kaz
             //заполненые лица второй формы
             $this->generateFlectiveClassForOneType($flectiveClass['id'], 1, 0, 2, "case_type_name ='possessive2' AND ");
             $this->generateFlectiveClassForOneType($flectiveClass['id'], 0, 1, 2, "case_type_name ='possessive2' AND ");
-        }*/
-       // $this->generateSyllableForFirstAndThirdClass(1, 0, 1, 3);
-      //  $this->generateSyllableForFirstAndThirdClass(0, 1, 1, 3);
-     //   $this->generateSyllableForFirstAndThirdClass(1, 0, 2, 3);
-     //   $this->generateSyllableForFirstAndThirdClass(0, 1, 2, 3);
-       // $this->generateSyllableForFirstAndThirdClass(0, 1, 13, 3);
+        }
+        echo 'Generate 1 + 3, 2 + 3'.PHP_EOL;
+        //генерируем 1 + 3 и 2 + 3
+        $this->generateSyllableForFirstAndThirdClass(1, 0, 1, 3);
+        $this->generateSyllableForFirstAndThirdClass(0, 1, 1, 3);
+        $this->generateSyllableForFirstAndThirdClass(1, 0, 2, 3);
+        $this->generateSyllableForFirstAndThirdClass(0, 1, 2, 3);
+
+        //генерируем 1 + 2 для личных второй формы
+        $this->generateSyllableForFirstAndThirdClass(1, 0, 1, 2, "case_type_name = 'possessive2' AND ");
+        $this->generateSyllableForFirstAndThirdClass(0, 1, 1, 2, "case_type_name = 'possessive2' AND ");
+
+        echo 'Generate 1 + 2'.PHP_EOL;
+        //генерируем 1 + 2
         $this->generateSyllableForFirstAndSecondClass(0, 1, 1, 2);
+        $this->generateSyllableForFirstAndSecondClass(1, 0, 1, 2);
+
+        echo 'Generate 12 + 3'.PHP_EOL;
+        //генерируем 12 + 3
+        $this->generateSyllableForFirstAndThirdClass(0, 1, 12, 3);
+        $this->generateSyllableForFirstAndThirdClass(1, 0, 12, 3);
     }
 
     //генерируем по началу 1 + 3 и 2 + 3
@@ -174,9 +189,27 @@ class Kaz
         $resultQuestion = $this->mysqli->query($query);
 
         while ($rowQuestion = $resultQuestion->fetch_assoc()) {
-            $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['word']);
-            $flectiveId = $this->detectFlectiveClass($syllableArray)['id'];
-            $query = "SELECT * FROM word_case WHERE case_position=".$caseNumber2." AND ".$hardSoftStr." AND (rule LIKE '%;".$flectiveId.";%' OR rule LIKE '%,".$flectiveId.";%' OR rule LIKE '%;".$flectiveId.",%')";
+            if( !empty($rowQuestion['face']) ) {
+                $faceIdQuery='SELECT id FROM rule_type WHERE face='.$rowQuestion['face'];
+                $result3 = $this->mysqli->query($faceIdQuery);
+                $ruleNumber=0;
+                while ($row = $result3->fetch_assoc()) {
+                    $ruleNumber = $row['id'];
+                    break;
+                }
+                $additionalQueryIfFace = "AND (rule LIKE '%;".$ruleNumber.";%')";
+            } else {
+                if($caseNumber1==12) {
+                    $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['last_case']);
+                } else {
+                    $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['word']);
+                }
+                $flectiveId = $this->detectFlectiveClass($syllableArray)['id'];
+                $additionalQueryIfFace = "AND (rule LIKE '%;".$flectiveId.";%' OR rule LIKE '%,".$flectiveId.";%' OR rule LIKE '%;".$flectiveId.",%')";
+            }
+
+
+            $query = "SELECT * FROM word_case WHERE ".$additionalQuery."case_position=".$caseNumber2." AND ".$hardSoftStr." ".$additionalQueryIfFace;
             $resultCase = $this->mysqli->query($query);
             while ($rowCase = $resultCase->fetch_assoc()) {
                 $wordType = $rowQuestion['type'].$rowCase['case_type_name'].';';
@@ -200,7 +233,7 @@ class Kaz
         while ($rowQuestion = $resultQuestion->fetch_assoc()) {
             $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['word']);
             $flectiveClassCase = $this->detectFlectiveClass($syllableArray);
-            $this->generateSyllableForFace($rowQuestion['flective_id'], $hard, $soft, $caseNumber2, intval(strval($caseNumber1).strval($caseNumber2)), $rowQuestion['word'], substr($rowQuestion['type'], 1), $flectiveClassCase);
+            $this->generateSyllableForFace($rowQuestion['flective_id'], $hard, $soft, $caseNumber2, intval(strval($caseNumber1).strval($caseNumber2)), $rowQuestion['word'], substr($rowQuestion['type'], 1), $flectiveClassCase) ;
         }
     }
     //не забыть про исключение "у" флективного класса 5
@@ -232,10 +265,11 @@ class Kaz
 
         if(!empty($result->num_rows)) {
             while ($row = $result->fetch_assoc()) {
-                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format, last_case) VALUES (".$flectiveId.",'".$additionalCase.$additionalStr.$row['case_letter']."',';".$additionalType.$row['case_type_name'].";', ".$hard.", ".$soft.", ".$caseTypeFormat.", '".$additionalStr.$row['case_letter']."');";
+                if(mb_strpos( $row['rule'], strval(13)) !== false) {
+                    $additionalStr='';
+                }
+                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format, last_case, face) VALUES (".$flectiveId.",'".$additionalCase.$additionalStr.$row['case_letter']."',';".$additionalType.$row['case_type_name'].";', ".$hard.", ".$soft.", ".$caseTypeFormat.", '".$additionalStr.$row['case_letter']."', ".$row['face'].");";
                 $result2 = $this->mysqli->query($query2);
-               // die(var_dump($result->num_rows,$this->mysqli->error));
-                //  echo $this->mysqli->error;
             }
         }
     }
