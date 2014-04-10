@@ -73,10 +73,18 @@ class Kaz
     protected function detectHardSoftEnding() {
         $resultWord = '';
         $lastChar = end($this->lastSyllableArray);
-        $result = $this->mysqli->query("SELECT char_from FROM char_transform WHERE rule_type='type_of_next_case';");
+        $lastBeforeChar = $this->lastSyllableArray[sizeof($this->lastSyllableArray)-2];
+        $result = $this->mysqli->query("SELECT char_from FROM char_transform WHERE rule_type='end_is_hard_case';");
+
         while ($row = $result->fetch_assoc()) {
             if($lastChar==$row['char_from']) return 1;
         }
+        $result = $this->mysqli->query("SELECT char_from FROM char_transform WHERE rule_type='end_is_soft_case';");
+        while ($row = $result->fetch_assoc()) {
+            if($lastBeforeChar.$lastChar==$row['char_from']) return 0;
+        }
+
+
         foreach(array_reverse($this->lastSyllableArray) as $word) {
             if( mb_strpos( implode($this->vowel), $word) !== false ) {
                 $resultWord = $word;
