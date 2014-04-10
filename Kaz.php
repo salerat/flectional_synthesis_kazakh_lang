@@ -72,6 +72,11 @@ class Kaz
     // 0 - возвращает если в слове гласная мягкая
     protected function detectHardSoftEnding() {
         $resultWord = '';
+        $lastChar = end($this->lastSyllableArray);
+        $result = $this->mysqli->query("SELECT char_from FROM char_transform WHERE rule_type='type_of_next_case';");
+        while ($row = $result->fetch_assoc()) {
+            if($lastChar==$row['char_from']) return 1;
+        }
         foreach(array_reverse($this->lastSyllableArray) as $word) {
             if( mb_strpos( implode($this->vowel), $word) !== false ) {
                 $resultWord = $word;
@@ -195,6 +200,14 @@ class Kaz
         $resultQuestion = $this->mysqli->query($query);
 
         while ($rowQuestion = $resultQuestion->fetch_assoc()) {
+            if(($caseNumber1==12)&&(!empty($rowQuestion['last_case']))) {
+                $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['last_case'],$rowQuestion);
+            } else {
+                $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['word'],$rowQuestion);
+            }
+            $flectiveId = $this->detectFlectiveClass($syllableArray)['id'];
+            $additionalQueryIfFlective = "(rule LIKE '%;".$flectiveId.";%' OR rule LIKE '%,".$flectiveId.";%' OR rule LIKE '%,".$flectiveId.",%' OR rule LIKE '%;".$flectiveId.",%')";
+
             if( !empty($rowQuestion['face']) ) {
                 $faceIdQuery='SELECT id FROM rule_type WHERE face='.$rowQuestion['face'];
                 $result3 = $this->mysqli->query($faceIdQuery);
@@ -203,20 +216,20 @@ class Kaz
                     $ruleNumber = $row['id'];
                     break;
                 }
-                $additionalQueryIfFace = "AND (rule LIKE '%;".$ruleNumber.";%')";
-            } else {
-                if(($caseNumber1==12)&&(!empty($rowQuestion['last_case']))) {
-                    $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['last_case'],$rowQuestion);
-                } else {
-                    $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['word'],$rowQuestion);
-                }
-                $flectiveId = $this->detectFlectiveClass($syllableArray)['id'];
-                $additionalQueryIfFace = "AND (rule LIKE '%;".$flectiveId.";%' OR rule LIKE '%,".$flectiveId.";%' OR rule LIKE '%,".$flectiveId.",%' OR rule LIKE '%;".$flectiveId.",%')";
+                $additionalQueryIfFace = "(rule LIKE '%;".$ruleNumber.";%')";
             }
 
+            if(empty($additionalQueryIfFace)) {
+                $additionalQueryFinal = 'AND '.$additionalQueryIfFlective;
+            } else {
+                $additionalQueryFinal =  "AND ( ".$additionalQueryIfFace." OR ( ".$additionalQueryIfFlective." AND (rule NOT LIKE '%;".$ruleNumber.";%') ) );";
+            }
+            $query = "SELECT * FROM word_case WHERE ".$additionalQuery."case_position=".$caseNumber2." AND ".$hardSoftStr." ".$additionalQueryFinal;
 
-            $query = "SELECT * FROM word_case WHERE ".$additionalQuery."case_position=".$caseNumber2." AND ".$hardSoftStr." ".$additionalQueryIfFace;
             $resultCase = $this->mysqli->query($query);
+            if(!empty($this->mysqli->error)) {
+                die(var_dump($this->mysqli->error, $additionalQueryFinal, $query));
+            }
             $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format) VALUES ";
             while ($rowCase = $resultCase->fetch_assoc()) {
                 $wordType = $rowQuestion['type'].$rowCase['case_type_name'].';';
@@ -301,6 +314,25 @@ class Kaz
         }
     }
 
+    protected function controlWordEnding($word, $syllable) {
+        $firstSyllableChar = $this->splitSyllable->mbStringToArray($syllable)[0];
+        $wordArray = $this->splitSyllable->mbStringToArray($word);
+        $lastWordChar = end( $wordArray );
+        if( in_array( $firstSyllableChar, $this->vowel, true) !== false ) {
+            $query = "SELECT char_to FROM char_transform WHERE char_from='".$lastWordChar."' AND rule_type='syllable_vowel';";
+            $result = $this->mysqli->query($query);
+            //die(var_dump($this->mysqli->error));
+            if(!empty($result->num_rows)) {
+                while ($row = $result->fetch_assoc()) {
+                    $newWord=$row['char_to'];
+                }
+                $word = mb_substr($word, 0, -1);
+                $word.=$newWord;
+            }
+        }
+        return $word;
+    }
+
     public function getFlectiveClass() {
         $hardSoft = $this->detectHardSoftEnding();
         if($hardSoft == 1) {
@@ -329,7 +361,8 @@ class Kaz
                 }
             }
             $row['type']=implode(' + ', $typeArrayRus);
-            $row['word'] = $this->wordOriginal.$row['word'];
+            $word=$this->controlWordEnding($this->wordOriginal, $row['word']);
+            $row['word'] = $word.$row['word'];
             array_push($resultArray, $row);
         }
         return $resultArray;
