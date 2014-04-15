@@ -33,7 +33,7 @@ echo '<!doctype html>
 
 <body>
 <form method="POST">
-  Введите слово в исходной форме (пример: адам) <input type="text" name="word" value="'.$word.'"><br>
+  Введите слово в именительном падеже (пример: адам) <input type="text" name="word" value="'.$word.'"><br>
   <input type="submit" value="Сгенерировать">
 </form>
 ';

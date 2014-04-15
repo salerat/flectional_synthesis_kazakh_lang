@@ -16,6 +16,7 @@ class Kaz
 
     protected $vowel; // Гласные буквы
     protected $vowelHard; // Гласные буквы твердые
+    protected $vowelExc; // Гласные буквы которые могут быть и твердыми и мягкими
     protected $vowelSoft; // Гласные буквы мягкие
     protected $voiced; // Звонкие и шипящие согласные
     protected $deaf; // Глухие согласные
@@ -24,6 +25,7 @@ class Kaz
     function __construct($wordOriginal)
     {
         $this->mysqli = new \mysqli("localhost", "root", "gerogle", "term_k");
+       // $this->mysqli = new \mysqli("localhost", "kaz", "nUhyYfmJDv2wQAps", "kaz");
         $this->mysqli->set_charset('utf8');
         $this->wordOriginal = $wordOriginal;
 
@@ -32,15 +34,20 @@ class Kaz
         $this->vowel = array();
         while ($row = $result->fetch_assoc()) array_push($this->vowel, $row['word']);
 
-        $query = "SELECT word FROM vowel WHERE hard = 1";
+        $query = "SELECT word FROM vowel WHERE hard = 1 AND soft IS NULL";
         $result = $this->mysqli->query($query);
         $this->vowelHard = array();
         while ($row = $result->fetch_assoc()) array_push($this->vowelHard, $row['word']);
 
-        $query = "SELECT word FROM vowel WHERE soft = 1";
+        $query = "SELECT word FROM vowel WHERE soft = 1 AND hard IS NULL";
         $result = $this->mysqli->query($query);
         $this->vowelSoft = array();
         while ($row = $result->fetch_assoc()) array_push($this->vowelSoft, $row['word']);
+
+        $query = "SELECT word FROM vowel WHERE soft = 1 AND hard  = 1";
+        $result = $this->mysqli->query($query);
+        $this->vowelExc = array();
+        while ($row = $result->fetch_assoc()) array_push($this->vowelExc, $row['word']);
 
         $query = "SELECT word FROM consonant WHERE voiced = 1 OR hiss = 1";
         $result = $this->mysqli->query($query);
@@ -75,7 +82,7 @@ class Kaz
         $lastChar = end($this->lastSyllableArray);
         $lastBeforeChar = $this->lastSyllableArray[sizeof($this->lastSyllableArray)-2];
         $result = $this->mysqli->query("SELECT char_from FROM char_transform WHERE rule_type='end_is_hard_case';");
-
+        //исключения, при которых по последним согласным определяется твоердость-мягкость слова
         while ($row = $result->fetch_assoc()) {
             if($lastChar==$row['char_from']) return 1;
         }
@@ -84,23 +91,63 @@ class Kaz
             if($lastBeforeChar.$lastChar==$row['char_from']) return 0;
         }
 
-
-        foreach(array_reverse($this->lastSyllableArray) as $word) {
-            if( mb_strpos( implode($this->vowel), $word) !== false ) {
-                $resultWord = $word;
-                break;
-            }
+        $splitedOriginalWord = $this->splitSyllable->mbStringToArray($this->wordOriginal);
+        //исключения с  к, г – в мягких, қ, ғ – в твёрдых.
+        $result = $this->mysqli->query("SELECT word FROM consonant WHERE hard_soft_param = 0;");
+        while ($row = $result->fetch_assoc()) {
+            if( mb_strpos( implode($this->lastSyllableArray),  $row['word']) !== false ) return 0;
         }
+
+        $result = $this->mysqli->query("SELECT word FROM consonant WHERE hard_soft_param = 1;");
+        while ($row = $result->fetch_assoc()) {
+            if( mb_strpos( implode($this->lastSyllableArray),  $row['word']) !== false ) return 1;
+        }
+
+        $resultVowel = $this->getLastVowel($this->lastSyllableArray);
+
+        if(empty($resultVowel)) {
+            return false;
+        }
+
+        $resultWord = $resultVowel['vowel'];
+
         if( !empty($resultWord) ) {
             if( in_array( $resultWord, $this->vowelHard, true) !== false ) {
                 return 1;
-            } else {
+            } elseif( in_array( $resultWord, $this->vowelSoft, true) !== false ) {
                 return 0;
+            } elseif( in_array( $resultWord, $this->vowelExc, true) !== false ) {
+                while(true) {
+                    $resultVowel = $this->getLastVowel($splitedOriginalWord, $resultVowel['pos'] + 1);
+                    if(empty($resultVowel)) {
+                        return false;
+                    }
+                    $resultWord = $resultVowel['vowel'];
+                    if( in_array( $resultWord, $this->vowelHard, true) !== false ) {
+                        return 1;
+                    } elseif( in_array( $resultWord, $this->vowelSoft, true) !== false ) {
+                        return 0;
+                    }
+                }
+
             }
         } else {
             return false;
         }
     }
+
+    protected function getLastVowel($wordArray, $startPosition = 0) {
+        $arrayRevers = array_reverse($wordArray);
+        for($num = $startPosition; $num < sizeof($arrayRevers); $num++) {
+            if( mb_strpos( implode($this->vowel), $arrayRevers[$num]) !== false ) {
+                return array(
+                    'vowel' => $arrayRevers[$num],
+                    'pos' => $num
+                );
+            }
+        }
+    }
+
 
     protected function detectFlectiveClass($lastSyllableArray) {
         if(empty($lastSyllableArray)) return false;
@@ -230,9 +277,28 @@ class Kaz
             if(empty($additionalQueryIfFace)) {
                 $additionalQueryFinal = 'AND '.$additionalQueryIfFlective;
             } else {
-                $additionalQueryFinal =  "AND ( ".$additionalQueryIfFace." OR ( ".$additionalQueryIfFlective." AND (rule NOT LIKE '%;".$ruleNumber.";%') ) );";
+                $query = "SELECT * FROM word_case WHERE ".$additionalQuery."case_position=".$caseNumber2." AND ".$hardSoftStr." AND ".$additionalQueryIfFace;
+                //if(!empty($additionalQueryIfFace)) die(var_dump($query));
+
+                $resultCase = $this->mysqli->query($query);
+                if(!empty($this->mysqli->error)) {
+                  //  die(var_dump($this->mysqli->error, $additionalQueryFinal, $query));
+                }
+                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format) VALUES ";
+                $caseType='';
+                while ($rowCase = $resultCase->fetch_assoc()) {
+                    $caseType.=" AND case_type_name<>'".$rowCase['case_type_name']."'";
+                    $wordType = $rowQuestion['type'].$rowCase['case_type_name'].';';
+                    $query2.= "(".$rowQuestion['flective_id'].",'".$rowQuestion['word'].$rowCase['case_letter']."','".$wordType."', ".$hard.", ".$soft.", ".strval($caseNumber1).strval($caseNumber2)."),";
+                }
+                $additionalQueryFinal='AND '.$additionalQueryIfFlective.$caseType;
+                $result2 = $this->mysqli->query(rtrim($query2, ','));
+              //  $additionalQueryFinal = 'AND '.$additionalQueryIfFlective;
+               // $additionalQueryFinal =  "AND ( ".$additionalQueryIfFace." OR ( ".$additionalQueryIfFlective." AND (rule NOT LIKE '%;".$ruleNumber.";%') ) ) GROUP BY case_type_name HAVING ".$additionalQueryIfFace;
+                //$additionalQueryFinal = "AND ".$additionalQueryIfFace;
             }
             $query = "SELECT * FROM word_case WHERE ".$additionalQuery."case_position=".$caseNumber2." AND ".$hardSoftStr." ".$additionalQueryFinal;
+           // if(!empty($additionalQueryIfFace)) die(var_dump($query));
 
             $resultCase = $this->mysqli->query($query);
             if(!empty($this->mysqli->error)) {
@@ -261,7 +327,6 @@ class Kaz
         while ($rowQuestion = $resultQuestion->fetch_assoc()) {
             $syllableArray = $this->splitSyllable->mbStringToArray($rowQuestion['word'],$rowQuestion);
             $flectiveClassCase = $this->detectFlectiveClass($syllableArray);
-            if($flectiveClassCase == false) die(var_dump($rowQuestion));
             $this->generateSyllableForFace($rowQuestion['flective_id'], $hard, $soft, $caseNumber2, intval(strval($caseNumber1).strval($caseNumber2)), $rowQuestion['word'], substr($rowQuestion['type'], 1), $flectiveClassCase) ;
         }
     }
@@ -329,7 +394,15 @@ class Kaz
         if( in_array( $firstSyllableChar, $this->vowel, true) !== false ) {
             $query = "SELECT char_to FROM char_transform WHERE char_from='".$lastWordChar."' AND rule_type='syllable_vowel';";
             $result = $this->mysqli->query($query);
-            //die(var_dump($this->mysqli->error));
+            /*
+             * еще обработать
+             *
+Исключения
+При присоединении притяжательных окончаний в некоторых словах выпадают гласные ы и i в последнем слоге.
+Например, орын – место, орным – моё место;   қарын – желудок, қарны – его желудок.
+А буквы к, қ, п в конце слова в этом случае не переходят в звонкие:
+көрiк – красота, көркi – её красота;   ерiк – воля, еркiм – моя воля;   әрiп – буква, әрпi – его буква
+             */
             if(!empty($result->num_rows)) {
                 while ($row = $result->fetch_assoc()) {
                     $newWord=$row['char_to'];
@@ -343,6 +416,7 @@ class Kaz
 
     public function getFlectiveClass() {
         $hardSoft = $this->detectHardSoftEnding();
+
         if($hardSoft == 1) {
             $hard = 1;
             $soft = 0;
