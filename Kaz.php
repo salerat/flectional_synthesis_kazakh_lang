@@ -80,7 +80,12 @@ class Kaz
     protected function detectHardSoftEnding() {
         $resultWord = '';
         $lastChar = end($this->lastSyllableArray);
-        $lastBeforeChar = $this->lastSyllableArray[sizeof($this->lastSyllableArray)-2];
+        if(sizeof($this->lastSyllableArray) <=2) {
+            $lastBeforeChar = $this->lastSyllableArray[sizeof($this->lastSyllableArray)-1];
+        } else {
+            $lastBeforeChar = $this->lastSyllableArray[sizeof($this->lastSyllableArray)-2];
+        }
+
         $result = $this->mysqli->query("SELECT char_from FROM char_transform WHERE rule_type='end_is_hard_case';");
         //исключения, при которых по последним согласным определяется твоердость-мягкость слова
         while ($row = $result->fetch_assoc()) {
@@ -152,6 +157,7 @@ class Kaz
     protected function detectFlectiveClass($lastSyllableArray) {
         if(empty($lastSyllableArray)) return false;
         $lastWord = end($lastSyllableArray);
+
         foreach( $this->flectiveClassArray as $flectiveClass) {
             if($flectiveClass['type'] == 'word') {
                 if( mb_strpos( $flectiveClass['word'], $lastWord) !== false ) {
@@ -264,53 +270,59 @@ class Kaz
             $additionalQueryIfFlective = "(rule LIKE '%;".$flectiveId.";%' OR rule LIKE '%,".$flectiveId.";%' OR rule LIKE '%,".$flectiveId.",%' OR rule LIKE '%;".$flectiveId.",%')";
 
             if( !empty($rowQuestion['face']) ) {
-                $faceIdQuery='SELECT id FROM rule_type WHERE face='.$rowQuestion['face'];
-                $result3 = $this->mysqli->query($faceIdQuery);
-                $ruleNumber=0;
-                while ($row = $result3->fetch_assoc()) {
-                    $ruleNumber = $row['id'];
-                    break;
-                }
-                $additionalQueryIfFace = "(rule LIKE '%;".$ruleNumber.";%')";
-            }
+                $type=trim(rtrim($rowQuestion['type'],';'),';');
 
-            if(empty($additionalQueryIfFace)) {
-                $additionalQueryFinal = 'AND '.$additionalQueryIfFlective;
-            } else {
+                $typeArray = explode(';', $type);
+                if(end($typeArray) != 'possessive_p_1') {
+
+                    $faceIdQuery='SELECT id FROM rule_type WHERE face='.$rowQuestion['face'];
+                    $result3 = $this->mysqli->query($faceIdQuery);
+                    $ruleNumber=0;
+                    while ($row = $result3->fetch_assoc()) {
+                        $ruleNumber = $row['id'];
+                        break;
+                    }
+                    $additionalQueryIfFace = "(rule LIKE '%;".$ruleNumber.";%')";
+                } else {
+                    $additionalQueryIfFace='';
+                }
+            }
+            $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format) VALUES ";
+            $caseType='';
+            if(!empty($additionalQueryIfFace)) {
+
                 $query = "SELECT * FROM word_case WHERE ".$additionalQuery."case_position=".$caseNumber2." AND ".$hardSoftStr." AND ".$additionalQueryIfFace;
-                //if(!empty($additionalQueryIfFace)) die(var_dump($query));
+
 
                 $resultCase = $this->mysqli->query($query);
                 if(!empty($this->mysqli->error)) {
                   //  die(var_dump($this->mysqli->error, $additionalQueryFinal, $query));
                 }
-                $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format) VALUES ";
-                $caseType='';
+
+
                 while ($rowCase = $resultCase->fetch_assoc()) {
                     $caseType.=" AND case_type_name<>'".$rowCase['case_type_name']."'";
                     $wordType = $rowQuestion['type'].$rowCase['case_type_name'].';';
                     $query2.= "(".$rowQuestion['flective_id'].",'".$rowQuestion['word'].$rowCase['case_letter']."','".$wordType."', ".$hard.", ".$soft.", ".strval($caseNumber1).strval($caseNumber2)."),";
                 }
-                $additionalQueryFinal='AND '.$additionalQueryIfFlective.$caseType;
-                $result2 = $this->mysqli->query(rtrim($query2, ','));
-              //  $additionalQueryFinal = 'AND '.$additionalQueryIfFlective;
-               // $additionalQueryFinal =  "AND ( ".$additionalQueryIfFace." OR ( ".$additionalQueryIfFlective." AND (rule NOT LIKE '%;".$ruleNumber.";%') ) ) GROUP BY case_type_name HAVING ".$additionalQueryIfFace;
-                //$additionalQueryFinal = "AND ".$additionalQueryIfFace;
+               // $this->mysqli->query(rtrim($query2, ','));
             }
+
+            $additionalQueryFinal='AND '.$additionalQueryIfFlective.$caseType;
+
             $query = "SELECT * FROM word_case WHERE ".$additionalQuery."case_position=".$caseNumber2." AND ".$hardSoftStr." ".$additionalQueryFinal;
-           // if(!empty($additionalQueryIfFace)) die(var_dump($query));
 
             $resultCase = $this->mysqli->query($query);
             if(!empty($this->mysqli->error)) {
                 die(var_dump($this->mysqli->error, $additionalQueryFinal, $query));
             }
-            $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format) VALUES ";
+           // $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format) VALUES ";
             while ($rowCase = $resultCase->fetch_assoc()) {
                 $wordType = $rowQuestion['type'].$rowCase['case_type_name'].';';
                 $query2.= "(".$rowQuestion['flective_id'].",'".$rowQuestion['word'].$rowCase['case_letter']."','".$wordType."', ".$hard.", ".$soft.", ".strval($caseNumber1).strval($caseNumber2)."),";
             }
-            $result2 = $this->mysqli->query(rtrim($query2, ','));
-            //die(var_dump($flectiveId, $resultCase->num_rows));
+            $this->mysqli->query(rtrim($query2, ','));
+
         }
     }
 
@@ -351,8 +363,18 @@ class Kaz
             $hardSoftStr = 'hard=1';
             $additionalStr = 'ы';
         }
-        if($flectiveClass['type'] == 'vowel') {
+        if( ($flectiveClass['type'] == 'vowel') ) {
             $additionalStr='';
+        }
+
+        if( (!empty($additionalCase))) {
+            if( ($flectiveClass['type'] == 'word') ) {
+                $additionalCaseSplitted = $this->splitSyllable->mbStringToArray($additionalCase);
+                $additionalCaseSplittedLast = end($additionalCaseSplitted);
+                if( $additionalCaseSplittedLast === 'у' ) {
+                    $additionalStr='';
+                }
+            }
         }
         $query = "SELECT * FROM word_case WHERE ".$hardSoftStr." AND case_position = ".$casePosition." AND case_type_name <> 'possessive2' ;";
         $result = $this->mysqli->query($query);
@@ -360,9 +382,24 @@ class Kaz
         if(!empty($result->num_rows)) {
             $query2 = "INSERT INTO all_case (flective_id,word,type,hard,soft, type_format, last_case, face) VALUES ";
             while ($row = $result->fetch_assoc()) {
-                if(mb_strpos( $row['rule'], strval(13)) !== false) {
+
+                if( (!empty($additionalCase) && ( ( $row['case_type_name'] === 'possessive_p_3') || ( $row['case_type_name'] === 'possessive_s_3') )  )) {
+                    $additionalCaseSplitted = $this->splitSyllable->mbStringToArray($additionalCase);
+                    $additionalCaseSplittedLast = end($additionalCaseSplitted);
+
+                    if( (in_array( $additionalCaseSplittedLast, $this->cons, true) === false) && ( mb_strpos( $row['rule'], strval(13)) !== false ) ) {
+                        continue;
+                    }
+
+                    if( (in_array( $additionalCaseSplittedLast, $this->cons, true) !== false) && ( mb_strpos( $row['rule'], strval(13)) === false ) ) {
+                        continue;
+                    }
+                }
+
+                if(( ( $row['case_type_name'] === 'possessive_p_3') || ( $row['case_type_name'] === 'possessive_s_3') ) ) {
                     $additionalStr='';
                 }
+
                 $query2.= "(".$flectiveId.",'".$additionalCase.$additionalStr.$row['case_letter']."',';".$additionalType.$row['case_type_name'].";', ".$hard.", ".$soft.", ".$caseTypeFormat.", '".$additionalStr.$row['case_letter']."', ".$row['face']."),";
             }
             $result2 = $this->mysqli->query(rtrim($query2, ','));
@@ -383,7 +420,7 @@ class Kaz
             while ($row = $result->fetch_assoc()) {
                 $query2.= "(".$flectiveId.",'".$row['case_letter']."',';".$row['case_type_name'].";', ".$hard.", ".$soft.", ".$casePosition."),";
             }
-            $result2 = $this->mysqli->query(rtrim($query2, ','));
+            $this->mysqli->query(rtrim($query2, ','));
         }
     }
 
@@ -425,14 +462,70 @@ class Kaz
             $soft = 1;
         }
         $flectiveClass = $this->detectFlectiveClass($this->lastSyllableArray);
+
         $query = "SELECT * FROM all_case WHERE hard=".$hard." AND soft=".$soft." AND flective_id=".$flectiveClass['id'];
         $resultCase = $this->mysqli->query($query);
-
+        if(empty($resultCase)) {
+            return array();
+        }
+        if($resultCase->num_rows ==0 ) {
+            return array();
+        }
         $resultArray = array();
         while ($row = $resultCase->fetch_assoc()) {
 
+            $saveType = $row['type'];
             $type=trim(rtrim($row['type'],';'),';');
             $typeArray = explode(';', $type);
+
+
+          /* if( !empty($row['face']) && (sizeof($typeArray) == 1)) {
+                $wordSplitted = $this->splitSyllable->mbStringToArray($row['word']);
+                $wordSplittedFirst = $wordSplitted[0];
+                $additionalCaseSplitted = $this->splitSyllable->mbStringToArray($this->wordOriginal);
+                $additionalCaseSplittedLast = end($additionalCaseSplitted);
+                if( (in_array( $additionalCaseSplittedLast, $this->vowel, true) !== false) && (in_array( $wordSplittedFirst, $this->cons, true) === false) ) {
+                    if( ($flectiveClass['type'] == 'word') ) {
+                        if( ( mb_strpos( $flectiveClass['word'], 'у' ) !== false )) {
+                            if(sizeof($wordSplitted) > 1) {
+                                $row['word'] = mb_substr($row['word'], 1);
+                            }
+                        }
+                    }
+                }
+            }*/
+
+            if( ( ( $row['type'] === ';possessive_p_3;') || ( $row['type'] === ';possessive_s_3;') )  ) {
+
+                $additionalCaseSplitted = $this->splitSyllable->mbStringToArray($this->wordOriginal);
+                $additionalCaseSplittedLast = end($additionalCaseSplitted);
+
+                $wordSplitted = $this->splitSyllable->mbStringToArray($row['word']);
+                $wordSplittedFirst = $wordSplitted[0];
+
+
+                if( (in_array( $wordSplittedFirst, $this->cons, true) !== false) && ($additionalCaseSplittedLast ==='у')) {
+                    //die(var_dump($wordSplittedFirst));
+                    continue;
+                }
+               // if( sizeof($wordSplitted) != 3) {
+                    if( (in_array( $additionalCaseSplittedLast, $this->cons, true) !== false) && (in_array( $wordSplittedFirst, $this->cons, true) !== false) ) {
+                        continue;
+                    }
+
+                    if( (in_array( $additionalCaseSplittedLast, $this->vowel, true) !== false) && (in_array( $wordSplittedFirst, $this->vowel, true) !== false) ) {
+
+                        if( ($additionalCaseSplittedLast !=='у') ) {
+                            continue;
+                        }
+
+
+                       // }
+                    }
+               // }
+
+            }
+
             $typeArrayRus = array();
             foreach($typeArray as $t) {
                 $query = "SELECT case_type_name_rus FROM case_type_name WHERE case_type_name='".$t."';";
@@ -445,7 +538,8 @@ class Kaz
             $row['type']=implode(' + ', $typeArrayRus);
             $word=$this->controlWordEnding($this->wordOriginal, $row['word']);
             $row['word'] = $word.$row['word'];
-            array_push($resultArray, $row);
+            $resultArray[$saveType] = $row;
+          //  array_push($resultArray, $row);
         }
         return $resultArray;
     }
