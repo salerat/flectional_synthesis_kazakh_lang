@@ -434,7 +434,7 @@ class Kaz
         $lastWordChar = end( $wordArray );
         if(in_array( $firstSyllableChar, $this->vowel, true) !== false) {
 
-            if( (($firstSyllableChar === 'ы') || ($firstSyllableChar === 'i')) && ($beforeLastChar !== 'ы') && ($beforeLastChar !== 'i') ) {
+            //if( (($firstSyllableChar === 'ы') || ($firstSyllableChar === 'i')) && ($beforeLastChar !== 'ы') && ($beforeLastChar !== 'i') ) {
                 $query = "SELECT char_to FROM char_transform WHERE char_from='".$lastWordChar."' AND rule_type='syllable_vowel';";
                 $result = $this->mysqli->query($query);
                 if(!empty($result->num_rows)) {
@@ -445,7 +445,7 @@ class Kaz
                     $word=implode('', $wordArray);
 
                 }
-            }
+           // }
         }
         /*
          *
@@ -457,8 +457,8 @@ class Kaz
          */
 
         if( (($beforeLastChar === 'ы') || ($beforeLastChar === 'i')) && ( ($firstSyllableChar === 'ы') || ($firstSyllableChar === 'i') ) ) {
-            unset($wordArray[sizeof($wordArray)-2]);
-            $word=implode('', $wordArray);
+           // unset($wordArray[sizeof($wordArray)-2]);
+          //  $word=implode('', $wordArray);
         }
         return $word;
     }
