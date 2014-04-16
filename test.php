@@ -119,8 +119,14 @@ $test123Array = array(
     array('rus' => 'на твоих бабочках', 'type' => ';plural;possessive_s_2;mestniy;', 'wordTransform' => 'көбелектерiңде', 'word' => 'көбелек'),
     array('rus' => 'из наших городов', 'type' => ';plural;possessive_p_1;ishodniy;', 'wordTransform' => 'қалаларымыздан', 'word' => 'қала'),
     array('rus' => 'в наши города', 'type' => ';plural;possessive_p_1;datelniy;', 'wordTransform' => 'қалаларымызға', 'word' => 'қала'),
+    array('rus' => '', 'type' => ';plural;possessive_p_2_r;mestniy;', 'wordTransform' => 'әкелерiңiзде', 'word' => 'әке'),
+    array('rus' => '', 'type' => ';plural;possessive_p_2_r;datelniy;', 'wordTransform' => 'әкелерiңiзге', 'word' => 'әке'),
+    array('rus' => '', 'type' => ';plural;possessive_p_2;datelniy;', 'wordTransform' => 'достарыңа', 'word' => 'дос'),
+    array('rus' => '', 'type' => ';plural;possessive_p_2_r;ishodniy;', 'wordTransform' => 'достарыңыздан', 'word' => 'дос'),
+    array('rus' => '', 'type' => ';plural;possessive_p_3;ishodniy;', 'wordTransform' => 'әкелерiнен', 'word' => 'әке'),
     array('rus' => '', 'type' => '', 'wordTransform' => '', 'word' => ''),
     array('rus' => '', 'type' => '', 'wordTransform' => '', 'word' => ''),
+
 );
 
 $testArray = $test123Array;

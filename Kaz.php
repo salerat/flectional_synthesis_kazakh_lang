@@ -273,7 +273,8 @@ class Kaz
                 $type=trim(rtrim($rowQuestion['type'],';'),';');
 
                 $typeArray = explode(';', $type);
-                if(end($typeArray) != 'possessive_p_1') {
+                $typeArrayEnd = end($typeArray);
+                if( ( $typeArrayEnd!= 'possessive_p_1') && ($typeArrayEnd!='possessive_p_2_r') && ($typeArrayEnd!='possessive_s_2_r')) {
 
                     $faceIdQuery='SELECT id FROM rule_type WHERE face='.$rowQuestion['face'];
                     $result3 = $this->mysqli->query($faceIdQuery);
@@ -427,26 +428,37 @@ class Kaz
     protected function controlWordEnding($word, $syllable) {
         $firstSyllableChar = $this->splitSyllable->mbStringToArray($syllable)[0];
         $wordArray = $this->splitSyllable->mbStringToArray($word);
+
+        $beforeLastChar = $wordArray[sizeof($wordArray)-2];
+
         $lastWordChar = end( $wordArray );
-        if( in_array( $firstSyllableChar, $this->vowel, true) !== false ) {
-            $query = "SELECT char_to FROM char_transform WHERE char_from='".$lastWordChar."' AND rule_type='syllable_vowel';";
-            $result = $this->mysqli->query($query);
-            /*
-             * еще обработать
-             *
-Исключения
-При присоединении притяжательных окончаний в некоторых словах выпадают гласные ы и i в последнем слоге.
-Например, орын – место, орным – моё место;   қарын – желудок, қарны – его желудок.
-А буквы к, қ, п в конце слова в этом случае не переходят в звонкие:
-көрiк – красота, көркi – её красота;   ерiк – воля, еркiм – моя воля;   әрiп – буква, әрпi – его буква
-             */
-            if(!empty($result->num_rows)) {
-                while ($row = $result->fetch_assoc()) {
-                    $newWord=$row['char_to'];
+        if(in_array( $firstSyllableChar, $this->vowel, true) !== false) {
+
+            if( (($firstSyllableChar === 'ы') || ($firstSyllableChar === 'i')) && ($beforeLastChar !== 'ы') && ($beforeLastChar !== 'i') ) {
+                $query = "SELECT char_to FROM char_transform WHERE char_from='".$lastWordChar."' AND rule_type='syllable_vowel';";
+                $result = $this->mysqli->query($query);
+                if(!empty($result->num_rows)) {
+                    while ($row = $result->fetch_assoc()) {
+                        $newWord=$row['char_to'];
+                    }
+                    $wordArray[sizeof($wordArray)-1] = $newWord;
+                    $word=implode('', $wordArray);
+
                 }
-                $word = mb_substr($word, 0, -1);
-                $word.=$newWord;
             }
+        }
+        /*
+         *
+        Исключения
+        При присоединении притяжательных окончаний в некоторых словах выпадают гласные ы и i в последнем слоге.
+        Например, орын – место, орным – моё место;   қарын – желудок, қарны – его желудок.
+        А буквы к, қ, п в конце слова в этом случае не переходят в звонкие:
+        көрiк – красота, көркi – её красота;   ерiк – воля, еркiм – моя воля;   әрiп – буква, әрпi – его буква
+         */
+
+        if( (($beforeLastChar === 'ы') || ($beforeLastChar === 'i')) && ( ($firstSyllableChar === 'ы') || ($firstSyllableChar === 'i') ) ) {
+            unset($wordArray[sizeof($wordArray)-2]);
+            $word=implode('', $wordArray);
         }
         return $word;
     }
