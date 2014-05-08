@@ -130,7 +130,7 @@ $test123Array = array(
 );
 
 //$testArray = $test123Array;
-$testArray = $test123Array;
+$testArray = array_merge($test2Arr,$test123Array);
 echo '<table border="1">
 <tr>
  <td><b>Исходное слово</b></td>

@@ -25,7 +25,7 @@ class Kaz
     function __construct($wordOriginal)
     {
         $this->mysqli = new \mysqli("localhost", "root", "gerogle", "term_k");
-       // $this->mysqli = new \mysqli("localhost", "kaz", "nUhyYfmJDv2wQAps", "kaz");
+        //$this->mysqli = new \mysqli("localhost", "kaz", "nUhyYfmJDv2wQAps", "kaz");
         $this->mysqli->set_charset('utf8');
         $this->wordOriginal = $wordOriginal;
 
@@ -482,6 +482,8 @@ class Kaz
         }
         if($resultCase->num_rows ==0 ) {
             return array();
+        } else {
+
         }
         $resultArray = array();
         while ($row = $resultCase->fetch_assoc()) {
@@ -553,6 +555,7 @@ class Kaz
             $resultArray[$saveType] = $row;
           //  array_push($resultArray, $row);
         }
+
         return $resultArray;
     }
 
